@@ -1,59 +1,79 @@
-#!/bin/bash
+#!/usr/bin/env bash
 echo "Cloning dependencies"
-git clone --depth=1 -b lightlosreb2 https://github.com/prorooter007/LightningKernel_Xiaomi_msm8953 kernel
-cd kernel
-git clone --depth=1 -b master https://github.com/kdrag0n/proton-clang clang
-git clone https://github.com/prorooter007/AnyKernel3 -b tissot --depth=1 AnyKernel
+git clone --depth=1 https://github.com/kdrag0n/proton-clang clang
+git clone --depth=1 https://github.com/NotZeetaa/Flashable_Zip AnyKernel
 echo "Done"
+DEVICE=tissot
+DEFCONFIG=lightning-tissot_defconfig
+VERSION=V0.1
+IMAGE=$(pwd)/out/arch/arm64/boot/Image.gz-dtb
+TANGGAL=$(date +"%F-%S")
+START=$(date +"%s")
 KERNEL_DIR=$(pwd)
-REPACK_DIR="${KERNEL_DIR}/AnyKernel"
-IMAGE="${KERNEL_DIR}/out/arch/arm64/boot/Image.gz"
-DTB_T="${KERNEL_DIR}/out/arch/arm64/boot/dts/qcom/msm8953-qrd-sku3-tissot-treble.dtb"
-DTB="${KERNEL_DIR}/out/arch/arm64/boot/dts/qcom/msm8953-qrd-sku3-tissot-nontreble.dtb"
-TANGGAL=$(date +"%Y%m%d-%H")
-BRANCH="$(git rev-parse --abbrev-ref HEAD)"
-export PATH="$(pwd)/clang/bin:$PATH"
-export KBUILD_COMPILER_STRING="$($kernel/clang/bin/clang --version | head -n 1 | perl -pe 's/\((?:http|git).*?\)//gs' | sed -e 's/  */ /g' -e 's/[[:space:]]*$//' -e 's/^.*clang/clang/')"
+PATH="${PWD}/clang/bin:$PATH"
+export KBUILD_COMPILER_STRING="$(${KERNEL_DIR}/clang/bin/clang --version | head -n 1 | perl -pe 's/\(http.*?\)//gs' | sed -e 's/  */ /g')"
 export ARCH=arm64
-export KBUILD_BUILD_USER=prorooter007
 export KBUILD_BUILD_HOST=circleci
+export KBUILD_BUILD_USER="NotZeetaa"
+# sticker plox
+function sticker() {
+    curl -s -X POST "https://api.telegram.org/bot$token/sendSticker" \
+        -d sticker="CAACAgEAAxkBAAEnKnJfZOFzBnwC3cPwiirjZdgTMBMLRAACugEAAkVfBy-aN927wS5blhsE" \
+        -d chat_id=$chat_id
+}
+# Send info plox channel
+function sendinfo() {
+    curl -s -X POST "https://api.telegram.org/bot$token/sendMessage" \
+        -d chat_id="$chat_id" \
+        -d "disable_web_page_preview=true" \
+        -d "parse_mode=html" \
+        -d text="<b>• neXus Kernel •</b>%0ABuild started on <code>Circle CI</code>%0AFor device <b>Xiaomi Redmi Note 7</b> (lavended)%0Abranch <code>$(git rev-parse --abbrev-ref HEAD)</code>(master)%0AUnder commit <code>$(git log --pretty=format:'"%h : %s"' -1)</code>%0AUsing compiler: <code>${KBUILD_COMPILER_STRING}</code>%0AStarted on <code>$(date)</code>%0A<b>Build Status:</b>#Stable"
+}
+# Push kernel to channel
+function push() {
+    cd AnyKernel
+    ZIP=$(echo *.zip)
+    curl -F document=@$ZIP "https://api.telegram.org/bot$token/sendDocument" \
+        -F chat_id="$chat_id" \
+        -F "disable_web_page_preview=true" \
+        -F "parse_mode=html" \
+        -F caption="Build took $(($DIFF / 60)) minute(s) and $(($DIFF % 60)) second(s). | For <b>Xiaomi Redmi Note 7 (lavended)</b> | <b>$(${GCC}gcc --version | head -n 1 | perl -pe 's/\(http.*?\)//gs' | sed -e 's/  */ /g')</b>"
+}
+# Fin Error
+function finerr() {
+    curl -s -X POST "https://api.telegram.org/bot$token/sendMessage" \
+        -d chat_id="$chat_id" \
+        -d "disable_web_page_preview=true" \
+        -d "parse_mode=markdown" \
+        -d text="Build throw an error(s)"
+    exit 1
+}
 # Compile plox
 function compile() {
-    make -j$(nproc) O=out ARCH=arm64 lightning-tissot_defconfig
-    make -j$(nproc) O=out \
-                    ARCH=arm64 \
-                      CC=clang \
-                      CROSS_COMPILE=aarch64-linux-gnu- \
-                      CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
-
-    cd $REPACK_DIR
-    mkdir kernel
-    mkdir dtb-treble
-    mkdir dtb-nontreble
+    make O=out ARCH=arm64 ${DEFCONFIG}
+    make -j$(nproc --all) O=out \
+                          ARCH=arm64 \
+			  CC=clang \
+			  CROSS_COMPILE=aarch64-linux-gnu- \
+			  CROSS_COMPILE_ARM32=arm-linux-gnueabi-
 
     if ! [ -a "$IMAGE" ]; then
+        finerr
         exit 1
-        echo "There are some issues"
     fi
-    cp $IMAGE $REPACK_DIR/kernel/
-
-    if ! [ -a "$DTB" ]; then
-        exit 1
-        echo "There are some issues"
-    fi
-    cp $DTB $REPACK_DIR/dtb-nontreble/
-
-    if ! [ -a "$DTB_T" ]; then
-        exit 1
-        echo "There are some issues"
-    fi
-    cp $DTB_T $REPACK_DIR/dtb-treble/
+    cp out/arch/arm64/boot/Image.gz-dtb AnyKernel
 }
 # Zipping
 function zipping() {
-    cd $REPACK_DIR || exit 1
-    zip -r9 Lightning_Kernel-${TANGGAL}.zip *
-    curl https://bashupload.com/Lightning_Kernel-${TANGGAL}.zip --data-binary @Lightning_Kernel-${TANGGAL}.zip
+    cd AnyKernel || exit 1
+    zip -r9 neXus-${VERSION}_${DEVICE}-KERNEL-${TANGGAL}.zip *
+    cd ..
 }
+sticker
+sendinfo
 compile
 zipping
+END=$(date +"%s")
+DIFF=$(($END - $START))
+push
+
