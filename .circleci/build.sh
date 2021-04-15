@@ -5,7 +5,7 @@ git clone --depth=1 https://github.com/NotZeetaa/Flashable_Zip AnyKernel
 echo "Done"
 DEVICE=tissot
 DEFCONFIG=lightning-tissot_defconfig
-VERSION=V0.1
+VERSION=V0.2
 IMAGE=$(pwd)/out/arch/arm64/boot/Image.gz-dtb
 TANGGAL=$(date +"%F-%S")
 START=$(date +"%s")
